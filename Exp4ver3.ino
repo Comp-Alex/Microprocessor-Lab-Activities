@@ -172,7 +172,7 @@ void keypadEvent(KeypadEvent key) {
         result = computeExpression(expression);
         hasResult = true;
         expression = "";
-        display = "";
+      //  display = "";  //remove the comment to clear the inputs after showing result
       }
     } else if (key == '*') { // clear one on press or clear result
       if (expression.length() > 0) {

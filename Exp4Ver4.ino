@@ -23,10 +23,66 @@ String expression = "";
 String display = "";
 float result = 0;
 bool hasResult = false;
+bool hasError = false;
+
+bool validateExpression(String expr) {
+  if (expr == "") return true;
+
+  // Start cannot be * or /
+  char first = expr[0];
+  if (first == '*' || first == '/') return false;
+
+  // End cannot be operator (except a trailing expressed signed number is caught in the sequence rules)
+  char last = expr[expr.length() - 1];
+  if (last == '+' || last == '-' || last == '*' || last == '/') return false;
+
+  for (int i = 0; i < expr.length() - 1; i++) {
+    char c = expr[i];
+    char next = expr[i + 1];
+
+    // If current is * or /, next must be digit or '-' (negative term only)
+    if (c == '*' || c == '/') {
+      if (!(next == '-' || (next >= '0' && next <= '9'))) {
+        return false;
+      }
+      if (next == '-' && i + 2 < expr.length()) {
+        char after = expr[i + 2];
+        if (!(after >= '0' && after <= '9')) return false; // must be -number after *-/
+      }
+    }
+
+    // If current is + or -, next can be +, - (sign), or digit, but not * or /
+    if (c == '+' || c == '-') {
+      if (next == '*' || next == '/') {
+        return false;
+      }
+    }
+
+    // No consecutive * or /
+    if ((c == '*' && (next == '*' || next == '/')) || (c == '/' && (next == '*' || next == '/'))) {
+      return false;
+    }
+
+    // Prevent mid-expression ++/-- as operator rather than unary number parsing when out of scope: allow one plus/minus chain in those circumstances
+    if ((c == '+' || c == '-') && (next == '+' || next == '-')) {
+      // allow 2+-/2 or 2--2 etc but not ++++ sequences
+      int chain = 1;
+      for (int j = i + 1; j < expr.length() && (expr[j] == '+' || expr[j] == '-'); j++) chain++;
+      if (chain > 2) return false;
+    }
+  }
+
+  return true;
+}
 
 float computeExpression(String expr) {
   // Supports + - * / with operator precedence (PEMDAS without parentheses)
   if (expr == "") return 0;
+
+  // Validate expression first
+  if (!validateExpression(expr)) {
+    return 0; // Error value
+  }
 
   // Tokenize numbers and operators
   const int MAX_TOKENS = 32;
@@ -35,7 +91,7 @@ float computeExpression(String expr) {
   int numCount = 0;
   int opCount = 0;
 
-  String num = "";
+  String  num = "";
   for (int i = 0; i < expr.length(); i++) {
     char c = expr[i];
 
@@ -107,7 +163,9 @@ void updateLCD() {
   lcd.print("                ");  // Clear second line
   lcd.setCursor(0,1);
   
-  if (hasResult) {
+  if (hasError) {
+    lcd.print("ERROR");
+  } else if (hasResult) {
     lcd.print(String(result, 2));
   }
 }
@@ -118,29 +176,40 @@ void keypadEvent(KeypadEvent key) {
   KeyState state = myKeypad.getState();
 
   if (state == HOLD) {
-    if (key == '*') { // clear all on hold
+    if (key == '*') { // HOLD *: clear all
       expression = "";
       display = "";
       hasResult = false;
+      hasError = false;
       updateLCD();
     }
   } else if (state == PRESSED) {
+    // Helper to check if we can add ANY operator (+,-,*,/)
+    char lastChar = expression.length() > 0 ? expression[expression.length()-1] : ' ';
+    bool canAddOperator = (expression == "" || 
+                          (lastChar >= '0' && lastChar <= '9') || 
+                          lastChar == '.' ||
+                          lastChar == '+' || lastChar == '-' ||
+                          lastChar == '*' || lastChar == '/');
+
     if (key >= '0' && key <= '9') {
-      if (hasResult) {
+      if (hasResult || hasError) {
         expression = key;
         display = expression;
         hasResult = false;
+        hasError = false;
       } else {
         expression += key;
         display = expression;
         hasResult = false;
+        hasError = false;
       }
     } else if (key == 'A') { // +
       if (hasResult) {
         expression = String(result, 2) + '+';
         display = expression;
         hasResult = false;
-      } else if (expression == "" || isDigit(expression[expression.length()-1]) || expression[expression.length()-1] == '.') {
+      } else if (canAddOperator) {
         expression += '+';
         display = expression;
         hasResult = false;
@@ -150,7 +219,7 @@ void keypadEvent(KeypadEvent key) {
         expression = String(result, 2) + '-';
         display = expression;
         hasResult = false;
-      } else if (expression == "" || isDigit(expression[expression.length()-1]) || expression[expression.length()-1] == '.') {
+      } else if (canAddOperator) {
         expression += '-';
         display = expression;
         hasResult = false;
@@ -160,7 +229,7 @@ void keypadEvent(KeypadEvent key) {
         expression = String(result, 2) + '*';
         display = expression;
         hasResult = false;
-      } else if (expression != "" && expression[expression.length()-1] >= '0' && expression[expression.length()-1] <= '9') {
+      } else if (canAddOperator) {  // FIXED: Now allows after +/-
         expression += '*';
         display = expression;
         hasResult = false;
@@ -170,25 +239,32 @@ void keypadEvent(KeypadEvent key) {
         expression = String(result, 2) + '/';
         display = expression;
         hasResult = false;
-      } else if (expression != "" && expression[expression.length()-1] >= '0' && expression[expression.length()-1] <= '9') {
+      } else if (canAddOperator) {  // FIXED: Now allows after +/-
         expression += '/';
         display = expression;
         hasResult = false;
       }
     } else if (key == '#') { // equals
       if (expression != "") {
-        result = computeExpression(expression);
-        hasResult = true;
-        expression = "";
-      //  display = "";  //remove the comment to clear the inputs after showing result
+        if (validateExpression(expression)) {
+          result = computeExpression(expression);
+          hasResult = true;
+          hasError = false;
+          expression = "";
+        } else {
+          hasError = true;
+          hasResult = false;
+        }
       }
-    } else if (key == '*') { // clear one on press or clear result
+    } else if (key == '*') { // PRESS *: clear one character at a time
       if (expression.length() > 0) {
         expression = expression.substring(0, expression.length()-1);
         display = expression;
         hasResult = false;
-      } else if (hasResult) {
+        hasError = false;
+      } else if (hasResult || hasError) {
         hasResult = false;
+        hasError = false;
         updateLCD();
       }
     }

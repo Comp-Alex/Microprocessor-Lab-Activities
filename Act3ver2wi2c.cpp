@@ -51,7 +51,7 @@ unsigned long previewTimer = 0;      // timer for auto scroll
 int wordCount = 0;                   // number of words
 
 // =======================
-// IMPROVED WORD COUNT FUNCTION
+// WORD COUNT FUNCTION
 // Ignores symbols and counts only words with letters/numbers
 // =======================
 void countWords() {

@@ -41,17 +41,18 @@ bool isDigit(char c) {
 
 // EXPRESSION VALIDATION
 bool validateExpression(String expr) {
-  if (expr == "") return true;
+  if (expr == "") return true; // empty expression is allowed while typing
   
   char first = expr[0];
-  if (first == '*' || first == '/') return false;
+  if (first == '*' || first == '/') return false; // cannot start with multiply or divide
   
   char last = expr[expr.length() - 1];
-  if (isOperator(last)) return false;
+  if (isOperator(last)) return false; // expression cannot end with an operator
 
   for (int i = 0; i < expr.length() - 1; i++) {
     char c = expr[i];
     char next = expr[i + 1];
+    // check pairs like "*+" or "/-" that are not valid
     if (c == '*' || c == '/') {
       if (!(next == '-' || isDigit(next) || next == '.')) return false;
     }
@@ -62,11 +63,11 @@ bool validateExpression(String expr) {
   return true;
 }
 
-// EXPRESSION COMPUTATION (BINAGO: Ginawang double lahat ng float)
+// EXPRESSION COMPUTATION 
 double computeExpression(String expr) {
   if (expr == "" || !validateExpression(expr)) {
     hasError = true;
-    return 0;
+    return 0; // invalid input returns error state
   }
 
   const int MAX_TOKENS = 32;
@@ -76,6 +77,7 @@ double computeExpression(String expr) {
   int opCount = 0;
 
   String num = "";
+  // read the string and split into numbers and operators
   for (int i = 0; i < expr.length(); i++) {
     char c = expr[i];
     if (isDigit(c) || c == '.') {
@@ -84,10 +86,10 @@ double computeExpression(String expr) {
       num += c;
     } else if (isOperator(c)) {
       if (num != "") {
-        nums[numCount++] = num.toDouble(); 
+        nums[numCount++] = num.toDouble(); // push number before operator
         num = "";
       }
-      ops[opCount++] = c;
+      ops[opCount++] = c; // store operator for later evaluation
     }
   }
   if (num != "") nums[numCount++] = num.toDouble(); 
@@ -106,6 +108,7 @@ double computeExpression(String expr) {
   for (int i = 0; i < opCount; i++) {
     char op = ops[i];
     double next = nums[i + 1];
+    // handle multiplication/division first to preserve operator precedence
     if (op == '*') {
       nums2[num2Count - 1] *= next;
     } else if (op == '/') {
@@ -121,6 +124,7 @@ double computeExpression(String expr) {
   }
 
   double result = nums2[0]; 
+  // now perform addition and subtraction left to right
   for (int i = 0; i < op2Count; i++) {
     if (ops2[i] == '+') result += nums2[i + 1];
     else if (ops2[i] == '-') result -= nums2[i + 1];
@@ -153,27 +157,27 @@ void displayExpression(String expr) {
 void displayResult(String expr, double result) { 
   lcd.clear();
   lcd.setCursor(0, 0);
-  lcd.print(expr);
+  lcd.print(expr); // show the expression on the first line
   
   lcd.setCursor(0, 1);
   if (hasError) {
-    lcd.print("Undefined");
+    lcd.print("Undefined"); // show error when result is invalid
   } else {
-    lcd.print("=");
+    lcd.print("="); // display the equals sign before value
     
     String resultStr;
     // Kung whole number, maglagay ng .00
     if (result == (long)result) {
-      resultStr = String((long)result) + ".00";
+      resultStr = String((long)result) + ".00"; // force .00 for whole numbers
     } else {
       // Kung may decimal, ipakita at linisin ang sobrang zeros sa dulo
-      resultStr = String(result, DECIMAL_PRECISION);
+      resultStr = String(result, DECIMAL_PRECISION); // show decimal number with fixed precision first
       while (resultStr.endsWith("0") && resultStr.indexOf('.') != -1) {
-        resultStr.remove(resultStr.length() - 1);
+        resultStr.remove(resultStr.length() - 1); // trim trailing zeros
       }
       // Kung sakaling natanggal lahat at nag-end sa ".", gawing ".00"
       if (resultStr.endsWith(".")) {
-        resultStr += "00";
+        resultStr += "00"; // if only a dot remains, add two zeros for a valid display
       }
     }
     
@@ -191,6 +195,7 @@ void handleDecimal() {
   bool hasDecimal = false;
   int len = expression.length();
   
+  // scan backward until operator or start to see if current number already has a decimal
   for (int i = len - 1; i >= 0; i--) {
     char c = expression[i];
     if (isOperator(c)) break;
@@ -201,7 +206,7 @@ void handleDecimal() {
   }
   
   if (!hasDecimal) {
-    expression += '.';
+    expression += '.'; // add decimal only when none found in current number
   }
 }
 
@@ -210,7 +215,7 @@ void handleOperator(char op) {
   
   if (len == 0) {
     if (op == '-') {
-      expression += op;
+      expression += op; // allow a leading negative sign only
     }
     return;
   }
@@ -219,18 +224,18 @@ void handleOperator(char op) {
   bool lastIsOperator = isOperator(lastChar);
   if (lastIsOperator) {
     if ((lastChar == '*' || lastChar == '/') && op == '-') {
-      expression += op;
+      expression += op; // allow sign after multiply/divide like "5*-3"
     }
     else if (lastChar == '-' && len > 1 && 
              (expression[len - 2] == '*' || expression[len - 2] == '/')) {
-      expression.remove(len - 1);
+      expression.remove(len - 1); // replace the extra minus sign
       expression[len - 2] = op;
     }
     else {
-      expression[len - 1] = op;
+      expression[len - 1] = op; // change the last operator to the new one
     }
   } else {
-    expression += op;
+    expression += op; // append valid operator after a number
   }
 }
 
@@ -239,7 +244,7 @@ void handleNumber(char digit) {
   // Case 1: Empty expression
   if (len == 0) {
     if (digit == '0') {
-      expression = "0";
+      expression = "0"; // start with single zero if first digit is 0
     } else {
       expression += digit;
     }
@@ -254,41 +259,41 @@ void handleNumber(char digit) {
     bool afterOp = isOperator(expression[len - 2]);
 
     if ((atStart || afterOp)) {
-      // If next input is another '0' without decimal, BLOCK
+      // prevent creating numbers like 00 or +00
       if (digit == '0') {
         return;
       }
     }
   }
 
-  expression += digit;
+  expression += digit; // append digit to current expression
 }
 
 void handleEquals() {
-  if (expression.length() == 0) return;
+  if (expression.length() == 0) return; // nothing to calculate
   
   hasError = false;
-  double result = computeExpression(expression);
+  double result = computeExpression(expression); // evaluate expression now
   
   displayResult(expression, result);
   if (!hasError) {
     String cleanResult;
     // Para sa internal memory na expression, mas malinis kapag walang .00
     if (result == (long)result) {
-      cleanResult = String((long)result);
+      cleanResult = String((long)result); // keep integer result clean for next input
     } else {
       cleanResult = String(result, DECIMAL_PRECISION);
       while (cleanResult.endsWith("0") && cleanResult.indexOf('.') != -1) {
-        cleanResult.remove(cleanResult.length() - 1);
+        cleanResult.remove(cleanResult.length() - 1); // remove extra zeros after decimal
       }
       if (cleanResult.endsWith(".")) {
         cleanResult.remove(cleanResult.length() - 1);
       }
     }
-    expression = cleanResult;
-    justCalculated = true;
+    expression = cleanResult; // store result as new expression
+    justCalculated = true; // mark that user just got a result
   } else {
-    expression = "";
+    expression = ""; // clear expression on error
   }
 }
 
@@ -307,13 +312,13 @@ void setup() {
 
 void loop() {
   char key = myKeypad.getKey();
-  if (!key) return;
+  if (!key) return; // no key pressed
   
   char mappedKey = mapKeyToOperator(key);
   
   if ((expression.length() == 0 || expression == "-") && 
       (mappedKey == '*' || mappedKey == '/')) {
-    return;
+    return; // ignore invalid leading multiply/divide
   }
   
   if (key == '#') {
@@ -323,7 +328,7 @@ void loop() {
 
   if (justCalculated) {
     if (isDigit(mappedKey) || mappedKey == '.') {
-      expression = "";
+      expression = ""; // start new entry after result if a number is pressed
     }
     justCalculated = false;
   }
